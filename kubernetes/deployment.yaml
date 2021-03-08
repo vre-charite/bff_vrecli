@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bff-vrecli
+  namespace: utility
+  labels:
+    app: bff-vrecli
+    env: charite
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bff-vrecli
+      env: charite
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 33%
+  template:
+    metadata:
+      labels:
+        app: bff-vrecli
+        env: charite
+    spec:
+      containers:
+        - name: bff-vrecli
+          image: 10.32.42.225:5000/bff-vrecli:<VERSION>
+          ports:
+            - containerPort: 5077
+          env:
+          - name: env
+            value: "charite"
+          readinessProbe:
+            tcpSocket:
+              port: 5077
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "1000Mi"
+              cpu: "1"
+            limits:
+              memory: "1000Mi"
+              cpu: "1"
+      nodeSelector:
+        namespace: utility
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bff-vrecli
+  namespace: utility
+  labels:
+    app: bff-vrecli
+    env: charite
+spec:
+  ports:
+  - name: http
+    port: 5077
+    targetPort: 5077
+  selector:
+    app: bff-vrecli
+    env: charite
+  type: ClusterIP
