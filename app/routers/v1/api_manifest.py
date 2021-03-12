@@ -3,7 +3,7 @@ from fastapi_utils.cbv import cbv
 from ...models.manifest_models import *
 from ...commons.logger_services.logger_factory_service import SrvLoggerFactory
 from ...resources.error_handler import catch_internal
-from ...auth import jwt_required
+from ...resources.dependencies import jwt_required
 from ...resources.helpers import *
 from sqlalchemy.orm import Session
 from ...resources. error_handler import customized_error_template, ECustomizedError
@@ -13,7 +13,7 @@ router = APIRouter()
 
 @cbv(router)
 class APIManifest:
-    _API_TAG = 'v1/manifest'
+    _API_TAG = 'V1 Manifest'
     _API_NAMESPACE = "api_manifest"
 
     def __init__(self):
