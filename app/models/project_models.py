@@ -40,11 +40,12 @@ class POSTProjectFileResponse(APIResponse):
 
 class POSTProjectFile(BaseModel):
     operator: str
-    #resumable_datatype: str
+    job_type: str
     upload_message: str
     type: str
     zone: str
     filename: str
+    data: list
 
 
 class GetProjectRoleResponse(APIResponse):
