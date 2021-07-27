@@ -6,6 +6,7 @@ from ...commons.logger_services.logger_factory_service import SrvLoggerFactory
 from ...resources.error_handler import catch_internal
 from ...resources.dependencies import *
 from ...resources.helpers import *
+from ...service_logger.logger_factory_service import SrvLoggerFactory
 
 
 router = APIRouter()
@@ -36,6 +37,11 @@ class APIProject:
         except (AttributeError, TypeError):
             return self.current_identity
         code, error_msg = verify_list_event(source_type, folder)
+        self._logger.info("API file_list_query".center(80, '-'))
+        self._logger.info(f"Received information project_code: {project_code}, zone: {zone}, "
+                          f"folder: {folder}, source_type: {source_type}")
+        self._logger.info(f"User request with identity: {self.current_identity}")
+        self._logger.info(f"Verified list event: {code}, {error_msg}")
         if error_msg:
             file_response.error_msg = error_msg
             file_response.code = code
@@ -47,6 +53,8 @@ class APIProject:
                             'project_code': project_code,
                             'zone': zone}
         permission = check_permission(permission_event)
+        self._logger.info(f"Permission check event: {permission_event}")
+        self._logger.info(f"Permission check result: {permission}")
         error_msg = permission.get('error_msg', '')
         if error_msg:
             file_response.error_msg = error_msg
@@ -54,26 +62,51 @@ class APIProject:
             file_response.result = permission.get('result')
             return file_response.json_response()
         uploader = permission.get('uploader')
-        if uploader:
+        if uploader and source_type == 'Container':
             child_attribute = {'project_code': project_code,
                                'uploader': user_name,
+                               'archived': False}
+        elif uploader and source_type == 'Folder':
+            child_attribute = {'project_code': project_code,
                                'archived': False}
         else:
             child_attribute = {'project_code': project_code,
                                'archived': False}
+        self._logger.info(f"Getting child node attribute: {child_attribute}")
         parent_label = get_parent_label(source_type)
         rel_path, folder_name = separate_rel_path(folder)
-        if parent_label == 'Dataset':
+        self._logger.info(f"Getting parent_label: {parent_label}")
+        self._logger.info(f"Getting relative_path: {rel_path}")
+        self._logger.info(f"Getting folder_name: {folder_name}")
+        if parent_label == 'Container':
             parent_attribute = {'code': project_code}
         else:
             parent_attribute = {'project_code': project_code,
                                 'name': folder_name,
                                 'folder_relative_path': rel_path}
         if source_type == 'Folder':
-            code, error_msg = check_folder_exist(zone, project_code, folder_name, rel_path)
+            code, error_msg = check_folder_exist(zone, project_code, folder)
+            self._logger.info(f"Check folder exist payload: 'zone':{zone}, 'project_code':{project_code}, 'folder_name':{folder_name}, 'rel_path':{rel_path}")
+            self._logger.info(f"Check folder exist response: {code}, {error_msg}")
+            self._logger.debug(
+                f"uploader != '': {uploader != ''}, not rel_path: {not rel_path}, folder != uploader: {folder != uploader}")
+            self._logger.debug(f"uploader: {uploader}, rel_path: {rel_path}, folder: {folder}")
             if error_msg:
                 file_response.error_msg = error_msg
-                file_response.code = code
+                file_response.code = EAPIResponseCode.forbidden
+                self._logger.error(f'Returning error: {EAPIResponseCode.forbidden}, {error_msg}')
+                return file_response.json_response()
+            elif uploader and not rel_path and folder_name != uploader:
+                file_response.error_msg = customized_error_template(ECustomizedError.PERMISSION_DENIED)
+                file_response.code = EAPIResponseCode.forbidden
+                self._logger.error(f'Returning wrong name folder error: {EAPIResponseCode.forbidden}, '
+                                   f'{customized_error_template(ECustomizedError.PERMISSION_DENIED)}')
+                return file_response.json_response()
+            elif uploader and rel_path and rel_path.split('/')[0] != uploader:
+                file_response.error_msg = customized_error_template(ECustomizedError.PERMISSION_DENIED)
+                file_response.code = EAPIResponseCode.forbidden
+                self._logger.error(f'Returning subfolder not in correct name folder error: {EAPIResponseCode.forbidden}, '
+                                   f'{customized_error_template(ECustomizedError.PERMISSION_DENIED)}')
                 return file_response.json_response()
         zone_label = [zone_type]
         url = ConfigClass.NEO4J_SERVICE + "relations/query"
@@ -81,14 +114,22 @@ class APIProject:
                    "start_params": parent_attribute,
                    "end_label": zone_label,
                    "end_params": child_attribute}
-        res = requests.post(url, json=payload)
-        res = res.json()
-        query_result = []
-        for f in res:
-            query_result.append(f.get('end_node'))
-        file_response.result = query_result
-        file_response.code = EAPIResponseCode.success
-        return file_response.json_response()
+        self._logger.info(f"Query file/folder payload: {payload}")
+        self._logger.info(f"Query file/folder API: {url}")
+        try:
+            res = requests.post(url, json=payload)
+            res = res.json()
+            query_result = []
+            for f in res:
+                query_result.append(f.get('end_node'))
+            file_response.result = query_result
+            file_response.code = EAPIResponseCode.success
+            return file_response.json_response()
+        except Exception as e:
+            self._logger.error(f"Error query files: {str(e)}")
+            file_response.error_msg = str(e)
+            file_response.code = EAPIResponseCode.internal_error
+            return file_response.json_response()
 
 
 @cbv(router)
@@ -113,6 +154,8 @@ class APIProject:
             user_name = self.current_identity['username']
         except (AttributeError, TypeError):
             return self.current_identity
+        self._logger.info("API forward_donwload_pre".center(80, '-'))
+        self._logger.info(f"User request with identity: {self.current_identity}")
         zone = get_zone(data.zone)
         permission_event = {'user_id': user_id,
                             'username': user_name,
@@ -121,7 +164,10 @@ class APIProject:
                             'zone': zone}
         permission = check_permission(permission_event)
         error_msg = permission.get('error_msg', '')
+        self._logger.info(f"Permission check event: {permission_event}")
+        self._logger.info(f"Permission check result: {permission}")
         if error_msg:
+            self._logger.info(f"Permission check error: {error_msg}")
             download_response.error_msg = error_msg
             download_response.code = permission.get('code')
             download_response.result = permission.get('result')
@@ -135,7 +181,10 @@ class APIProject:
                     "labels": [zone]
                 }
                 }
+                self._logger.info(f"File query payload: {payload}")
+                self._logger.info(f"File query API: {ConfigClass.NEO4J_SERVICE_v2 + 'nodes/query'}")
                 file_res = requests.post(ConfigClass.NEO4J_SERVICE_v2 + 'nodes/query', json=payload)
+                self._logger.info(f"File query result: {file_res.text}")
                 file_info = file_res.json().get('result')[0]
                 owner = file_info.get('uploader')
                 if owner != permission.get('uploader'):
@@ -156,5 +205,7 @@ class APIProject:
                    'operator': data.operator,
                    'project_code': data.project_code,
                    'session_id': data.session_id}
+        self._logger.info(f"Download requests payload: {payload}")
+        self._logger.info(f"Download requests API: {url}")
         pre_res = requests.post(url, json=payload)
         return JSONResponse(content=pre_res.json(), status_code=pre_res.status_code)

@@ -33,7 +33,11 @@ class APIProject:
             user_role = self.current_identity['role']
         except (AttributeError, TypeError):
             return self.current_identity
+        self._logger.info("API list_manifest".center(80, '-'))
+        self._logger.info(f"User request with identity: {self.current_identity}")
         project_list = get_user_projects(user_role, username)
+        self._logger.info(f"Getting user projects: {project_list}")
+        self._logger.info(f"Number of projects: {len(project_list)}")
         api_response.result = project_list
         api_response.code = EAPIResponseCode.success
         return api_response.json_response()
@@ -52,15 +56,20 @@ class APIProject:
             user_id = self.current_identity["user_id"]
         except (AttributeError, TypeError):
             return self.current_identity
+        self._logger.info("API list_manifest".center(80, '-'))
+        self._logger.info(f"User request with identity: {self.current_identity}")
         error = validate_upload_event(data.zone, data.type)
         if error:
+            self._logger.error(f"Upload event error: {error}")
             api_response.error_msg = error
             api_response.code = EAPIResponseCode.bad_request
             return api_response.json_response()
         if role == "admin":
-            pass
+            self._logger.info(f"User platform role: {role}")
         else:
+            self._logger.info(f"User platform role: {role}")
             project_role, code = get_project_role(user_id, project_code)
+            self._logger.info(f"User project role: {project_role}, {code}")
             if data.zone == "vrecore" and project_role == "contributor":
                 api_response.error_msg = customized_error_template(ECustomizedError.PERMISSION_DENIED)
                 api_response.code = EAPIResponseCode.forbidden
@@ -87,41 +96,11 @@ class APIProject:
             api_response.result = result.json()["result"]
         return api_response.json_response()
 
-    @router.get("/project/{project_code}/role", tags=[_API_TAG],
-                response_model=GetProjectRoleResponse,
-                summary="Get user's project role")
-    @catch_internal(_API_NAMESPACE)
-    async def get_user_project_role(self, project_code):
-        """
-        Get user's role in the project
-        """
-        api_response = GetProjectRoleResponse()
-        try:
-            user_id = self.current_identity['user_id']
-        except (AttributeError, TypeError):
-            return self.current_identity
-        project = get_dataset_node(project_code)
-        if not project:
-            api_response.error_msg = customized_error_template(ECustomizedError.PROJECT_NOT_FOUND)
-            api_response.code = EAPIResponseCode.not_found
-            return api_response.json_response()
-        project_id = project.get("id")
-        role_check_result = get_user_role(user_id, project_id)
-        if role_check_result:
-            role = role_check_result.get("r").get('type')
-            api_response.result = role
-            api_response.code = EAPIResponseCode.success
-            return api_response.json_response()
-        else:
-            api_response.error_msg = customized_error_template(ECustomizedError.USER_NOT_IN_PROJECT)
-            api_response.code = EAPIResponseCode.not_found
-            return api_response.json_response()
-
     @router.get("/project/{project_code}/folder", tags=[_API_TAG],
                 response_model=GetProjectFolderResponse,
                 summary="Get folder in the project")
     @catch_internal(_API_NAMESPACE)
-    async def get_project_folder(self, project_code, zone, folder, relative_path):
+    async def get_project_folder(self, project_code, zone, folder):
         """
         Get folder in project
         """
@@ -132,27 +111,39 @@ class APIProject:
             user_name = self.current_identity['username']
         except (AttributeError, TypeError):
             return self.current_identity
-        error = validate_upload_event(zone)
-        if error:
-            api_response.error_msg = error
-            api_response.code = EAPIResponseCode.bad_request
+        self._logger.info("API list_manifest".center(80, '-'))
+        self._logger.info(f"User request with identity: {self.current_identity}")
+        zone_type = get_zone(zone)
+        permission_event = {'user_id': user_id,
+                            'username': user_name,
+                            'role': role,
+                            'project_code': project_code,
+                            'zone': zone_type}
+        permission = check_permission(permission_event)
+        self._logger.info(f"Permission check event: {permission_event}")
+        self._logger.info(f"Permission check result: {permission}")
+        error_msg = permission.get('error_msg', '')
+        if error_msg:
+            api_response.error_msg = error_msg
+            api_response.code = permission.get('code')
+            api_response.result = permission.get('result')
             return api_response.json_response()
-        if role == "admin":
-            project_role = 'admin'
-        else:
-            project_role, code = get_project_role(user_id, project_code)
-            if project_role == 'User not in the project':
-                api_response.error_msg = customized_error_template(ECustomizedError.PERMISSION_DENIED)
-                api_response.code = EAPIResponseCode.forbidden
-                api_response.result = project_role
-                return api_response.json_response()
+        uploader = permission.get('uploader')
+        accessing_folder = folder.split('/')[0]
+        if uploader and uploader != accessing_folder:
+            api_response.error_msg = customized_error_template(ECustomizedError.PERMISSION_DENIED)
+            api_response.code = EAPIResponseCode.forbidden
+            return api_response.json_response()
         folder_check_event = {
-            'namespace': zone,
+            'namespace': zone_type,
+            'display_path': folder,
             'project_code': project_code,
-            'folder_name': folder,
-            'folder_relative_path': relative_path
+            'folder_name': folder.split('/')[-1],
+            'folder_relative_path': '/'.join(folder.split('/')[0:-1])
         }
         response = http_query_node_zone(folder_check_event)
+        self._logger.info(f"Folder check event: {folder_check_event}")
+        self._logger.info(f"Folder check response: {response.text}")
         if response.status_code != 200:
             error_msg = "Upload Error: " + response.json()["error_msg"]
             response_code = EAPIResponseCode.internal_error
@@ -160,20 +151,8 @@ class APIProject:
         else:
             res = response.json().get('result')
             if res:
-                res = res[0]
-                owner = res.get('uploader')
-                if project_role != 'admin' and owner != user_name and zone.lower() == 'greenroom':
-                    result = ''
-                    response_code = EAPIResponseCode.forbidden
-                    error_msg = 'Permission Denied'
-                elif project_role == 'contributor' and zone.lower() == 'vrecore':
-                    result = ''
-                    response_code = EAPIResponseCode.forbidden
-                    error_msg = 'Permission Denied'
-                else:
-                    result = res
-                    response_code = EAPIResponseCode.success
-                    error_msg = ''
+                result = res[0]
+                response_code = EAPIResponseCode.success
             else:
                 result = res
                 response_code = EAPIResponseCode.not_found
