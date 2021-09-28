@@ -1,10 +1,11 @@
 import json
 import requests
+import paramiko
+import time
 from ..config import ConfigClass
 from ..resources. error_handler import customized_error_template, ECustomizedError
 from ..models.base_models import APIResponse, EAPIResponseCode
-from ..commons.data_providers.data_models import DataManifestModel, DataAttributeModel
-from ..commons.data_providers.database import SessionLocal
+from ..commons.data_providers.data_models import DataManifestModel, DataAttributeModel, DatasetVersionModel
 from ..service_logger.logger_factory_service import SrvLoggerFactory
 
 _logger = SrvLoggerFactory("Helpers").get_logger()
@@ -19,76 +20,7 @@ def get_path_by_zone(namespace, project_code):
     return {"greenroom": f"/data/vre-storage/{project_code}/",
             "vrecore": f"/vre-data/{project_code}/"
             }.get(namespace.lower(), 'greenroom')
-
-
-class Singleton(type):
-    _instances = {}
-
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
-        return cls._instances[cls]
-
-
-class DBConnection(metaclass=Singleton):
-
-    def __init__(self):
-        self.session = SessionLocal()
-
-    def get_db(self):
-        db = self.session
-        try:
-            yield db
-        finally:
-            db.close()
-
-
-def get_manifest_name_from_project_in_db(event):
-    project_code = event.get('project_code')
-    manifest_name = event.get('manifest_name', None)
-    db_session = event.get('session')
-    if manifest_name:
-        m = db_session.query(DataManifestModel.name,
-                             DataManifestModel.id)\
-            .filter_by(project_code=project_code, name=manifest_name)\
-            .first()
-        if not m:
-            return None
-        else:
-            manifest = {'name': m[0], 'id': m[1]}
-            return manifest
-    else:
-        manifests = db_session.query(DataManifestModel.name,
-                                     DataManifestModel.id)\
-            .filter_by(project_code=project_code)\
-            .all()
-        manifest_in_project = []
-        for m in manifests:
-            manifest = {'name': m[0], 'id': m[1]}
-            manifest_in_project.append(manifest)
-        return manifest_in_project
-
-
-def get_attributes_in_manifest_in_db(event):
-    manifest = event.get('manifest')
-    db_session = event.get('session')
-    attr_list = []
-    attributes = db_session.query(DataAttributeModel.name,
-                                  DataAttributeModel.type,
-                                  DataAttributeModel.optional,
-                                  DataAttributeModel.value). \
-        filter_by(manifest_id=manifest.get('id')). \
-        order_by(DataAttributeModel.id.asc()).all()
-    if not attributes:
-        return None
-    for attr in attributes:
-        result = {"name": attr[0],
-                  "type": attr[1],
-                  "optional": attr[2],
-                  "value": attr[3]}
-        attr_list.append(result)
-    return attr_list
-
+            
 
 def get_user_role(user_id, project_id):
     url = ConfigClass.NEO4J_SERVICE + "/relations"
@@ -103,29 +35,63 @@ def get_user_role(user_id, project_id):
         return None
 
 
-def query__node_has_relation_with_admin():
-    url = ConfigClass.NEO4J_SERVICE + "nodes/Container/query"
+def query__node_has_relation_with_admin(label='Container'):
+    url = ConfigClass.NEO4J_SERVICE + f"nodes/{label}/query"
     data = {'is_all': 'true'}
     try:
         res = requests.post(url=url, json=data)
         project = res.json()
         return project
     except Exception:
-        return None
+        return []
 
-
-def query_node_has_relation_for_user(username):
+def query_node_has_relation_for_user(username, label='Container'):
+    _logger.info("query_node_has_relation_for_user".center(80, '-'))
     url = ConfigClass.NEO4J_SERVICE + "relations/query"
-    data = {'start_params': {'name': username}}
+    data = {
+        'start_label': 'User',
+        'start_params': {'name': username},
+        'end_label': label
+    }
+    _logger.info(f'Query payload: {data}')
     try:
         res = requests.post(url=url, json=data)
+        _logger.info(f'Query response: {res.text}')
         res = res.json()
-        project = []
-        for i in res:
-            project.append(i['end_node'])
-        return project
+        return res
     except Exception:
-        return None
+        return []
+    
+def get_node_by_geid(geid):
+    _logger.info("get_node_by_geid".center(80, '-'))
+    url = ConfigClass.NEO4J_SERVICE + f"nodes/geid/{geid}"
+    _logger.info(f'Getting node: {url}')
+    try:
+        res = requests.get(url)
+        _logger.info(f'Getting node info: {res.text}')
+        result = res.json()
+    except Exception as e:
+        _logger.error(f'Error getting node by geid: {e}')
+        result = None
+    return result
+
+
+def batch_query_node_by_geid(geid_list):
+    url = ConfigClass.NEO4J_SERVICE + "nodes/query/geids"
+    payload = {
+        "geids": geid_list
+    }
+    res = requests.post(url, json=payload)
+    res_json = res.json()
+    result = res_json.get('result')
+    located_geid = []
+    query_result = {}
+    for node in result:
+        geid = node.get('global_entity_id', '')
+        if geid in geid_list:
+            located_geid.append(geid)
+            query_result[geid] = node
+    return located_geid, query_result
 
 
 def query_file_in_project(project_code, filename, zone='Greenroom'):
@@ -195,10 +161,10 @@ def get_file_by_id(file_id):
         return None
 
 
-def get_dataset_node(project_code):
-    post_data = {"code": project_code}
+def get_node_by_code(code, label):
+    post_data = {"code": code}
     try:
-        response = requests.post(ConfigClass.NEO4J_SERVICE + f"nodes/Container/query", json=post_data)
+        response = requests.post(ConfigClass.NEO4J_SERVICE + f"nodes/{label}/query", json=post_data)
         if not response.json():
             return None
         return response.json()[0]
@@ -223,21 +189,27 @@ def has_permission(event):
 
 def get_user_projects(user_role, username):
     _logger.info("get_user_projects".center(80, '-'))
+    _logger.info(f'Current username: {username}')
     projects_list = []
     if user_role == "admin":
         project_candidate = query__node_has_relation_with_admin()
     else:
-        project_candidate = query_node_has_relation_for_user(username)
+        projects = query_node_has_relation_for_user(username)
+        project_candidate = []
+        for p in projects:
+            _logger.info(f"Found project status: {p['r']}")
+            if p['r'].get('status', 'hibernated') == 'active':
+                project_candidate.append(p['end_node'])
+            else:
+                _logger.info(f"Disabled project: {p['end_node']}")
+        _logger.info(f'Found projects: {project_candidate}')
     _logger.info(f"Number of candidates: {len(project_candidate)}")
     for p in project_candidate:
-        if 'Container' in p['labels']:
-            res_projects = {'name': p.get('name'),
-                            'code': p.get('code'),
-                            'id': p.get('id'),
-                            'geid': p.get('global_entity_id')}
-            projects_list.append(res_projects)
-        else:
-            _logger.info(f'Non-candidate: {p}')
+        res_projects = {'name': p.get('name'),
+                        'code': p.get('code'),
+                        'id': p.get('id'),
+                        'geid': p.get('global_entity_id')}
+        projects_list.append(res_projects)
     _logger.info(f"Number of projects found: {len(projects_list)}")
     return projects_list
 
@@ -250,7 +222,7 @@ def attach_manifest_to_file(event):
     username = event.get('username')
     project_role = event.get('project_role')
     _logger.info("attach_manifest_to_file".center(80, '-'))
-    url = ConfigClass.FILEINFO_HOST + "/v1/file/attributes/attach"
+    url = ConfigClass.FILEINFO_HOST + "/v1/files/attributes/attach"
     payload = {"project_code": project_code,
                "manifest_id": manifest_id,
                "global_entity_id": [global_entity_id],
@@ -265,53 +237,6 @@ def attach_manifest_to_file(event):
     if not response.json():
         return None
     return response.json()
-
-
-def validate_has_non_optional_attribute_field(input_attributes, compare_attr):
-    if not compare_attr.get('optional') and not compare_attr.get('name') in input_attributes:
-        return customized_error_template(ECustomizedError.MISSING_REQUIRED_ATTRIBUTES)
-
-
-def validate_attribute_field_by_value(input_attributes, compare_attr):
-    attr_name = compare_attr.get('name')
-    value = input_attributes.get(attr_name)
-    if value and compare_attr.get('type') == "text":
-        if len(value) > 100:
-            return customized_error_template(ECustomizedError.TEXT_TOO_LONG) % attr_name
-    elif value and compare_attr.get('type') == 'multiple_choice':
-        if value not in compare_attr.get('value').split(","):
-            return customized_error_template(ECustomizedError.INVALID_CHOICE) % attr_name
-    else:
-        if not compare_attr.get('optional'):
-            return customized_error_template(ECustomizedError.FIELD_REQUIRED) % attr_name
-
-
-def validate_attribute_name(input_attributes, exist_attributes):
-    valid_attributes = [attr.get('name') for attr in exist_attributes]
-    for key, value in input_attributes.items():
-        if key not in valid_attributes:
-            return customized_error_template(ECustomizedError.INVALID_ATTRIBUTE) % key
-
-
-def has_valid_attributes(event):
-    attributes = event.get('attributes')
-    exist_attributes = get_attributes_in_manifest_in_db(event)
-    _name_error = validate_attribute_name(attributes, exist_attributes)
-    if _name_error:
-        return _name_error
-    for attr in exist_attributes:
-        required_attr = attr.get('name')
-        if not attr.get('optional') and required_attr not in attributes:
-            return customized_error_template(ECustomizedError.MISSING_REQUIRED_ATTRIBUTES) % required_attr
-        elif attr not in exist_attributes:
-            return customized_error_template(ECustomizedError.INVALID_ATTRIBUTE) % attr
-        else:
-            _optional_error = validate_has_non_optional_attribute_field(attributes, attr)
-            if _optional_error:
-                return _optional_error
-            _value_error = validate_attribute_field_by_value(attributes, attr)
-            if _value_error:
-                return _value_error
 
 
 def http_query_node_zone(folder_event):
@@ -385,3 +310,23 @@ def check_folder_exist(zone, project_code, folder):
         error_msg = 'Folder not exist'
         code = EAPIResponseCode.not_found
     return code, error_msg
+
+
+def get_hpc_jwt_token(token_issuer, username, password = None):
+    _logger.info("get_hpc_jwt_token".center(80, '-'))
+    ssh_client = paramiko.SSHClient()
+    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        ssh_client.connect(token_issuer, username = username, password = password)
+    except Exception as e:
+        _logger.error(e)
+    stdin, stdout, stderr = ssh_client.exec_command("scontrol token")
+    time.sleep(1)
+    out = stdout.read().decode().strip()
+    error = stderr.read().decode().strip()
+    _logger.info(f"HPC stdout: {out}")
+    _logger.info(f"HPC stderr: {error}")
+    ssh_client.close()
+    token = out.split('=')[1]
+    _logger.info(f"HPC authorization: {token}")
+    return token
