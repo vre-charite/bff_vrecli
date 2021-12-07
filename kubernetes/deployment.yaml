@@ -6,6 +6,8 @@ metadata:
   labels:
     app: bff-vrecli
     env: charite
+  annotations:
+    "sidecar.jaegertracing.io/inject": "true"
 spec:
   replicas: 1
   selector:
