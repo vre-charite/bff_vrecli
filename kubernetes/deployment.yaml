@@ -27,7 +27,7 @@ spec:
     spec:
       containers:
         - name: bff-vrecli
-          image: 10.32.42.225:5000/bff-vrecli:<VERSION>
+          image: s-hdp-vre-v007.charite.de/bff-vrecli:<VERSION>
           ports:
             - containerPort: 5080
           env:
