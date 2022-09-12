@@ -1,5 +1,24 @@
+# Copyright 2022 Indoc Research
+# 
+# Licensed under the EUPL, Version 1.2 or – as soon they
+# will be approved by the European Commission - subsequent
+# versions of the EUPL (the "Licence");
+# You may not use this work except in compliance with the
+# Licence.
+# You may obtain a copy of the Licence at:
+# 
+# https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+# 
+# Unless required by applicable law or agreed to in
+# writing, software distributed under the Licence is
+# distributed on an "AS IS" basis,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+# express or implied.
+# See the Licence for the specific language governing
+# permissions and limitations under the Licence.
+# 
+
 from ..resources. error_handler import customized_error_template, ECustomizedError
-from ..models.base_models import APIResponse, EAPIResponseCode
 from ..models.error_model import InvalidEncryptionError
 from .database_service import RDConnection
 from .helpers import *
@@ -8,6 +27,10 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.fernet import Fernet
 import base64
+from logger import LoggerFactory
+
+
+_logger = LoggerFactory("validation_service").get_logger()
 
 def decryption(encrypted_message, secret):
     """
@@ -58,15 +81,21 @@ class ManifestValidator:
 
     @staticmethod
     def validate_attribute_name(input_attributes, exist_attributes):
+        _logger.info("validate attribute name")
         valid_attributes = [attr.get('name') for attr in exist_attributes]
         for key, value in input_attributes.items():
             if key not in valid_attributes:
                 return customized_error_template(ECustomizedError.INVALID_ATTRIBUTE) % key
 
     def has_valid_attributes(self, event):
+        _logger.info(f"received event: {event}")
         attributes = event.get('attributes')
-        exist_attributes = self.db.get_attributes_in_manifest_in_db(event)
+        manifest = event.get('manifest')
+        exist_manifest = self.db.get_attributes_in_manifest_in_db(manifest)
+        _logger.info(f"existing manifest: {exist_manifest}")
+        exist_attributes = exist_manifest[0].get('attributes')
         _name_error = self.validate_attribute_name(attributes, exist_attributes)
+        _logger.info(f"validation name error: {_name_error}")
         if _name_error:
             return _name_error
         for attr in exist_attributes:

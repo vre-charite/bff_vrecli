@@ -1,12 +1,31 @@
+// Copyright 2022 Indoc Research
+// 
+// Licensed under the EUPL, Version 1.2 or – as soon they
+// will be approved by the European Commission - subsequent
+// versions of the EUPL (the "Licence");
+// You may not use this work except in compliance with the
+// Licence.
+// You may obtain a copy of the Licence at:
+// 
+// https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+// 
+// Unless required by applicable law or agreed to in
+// writing, software distributed under the Licence is
+// distributed on an "AS IS" basis,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+// express or implied.
+// See the Licence for the specific language governing
+// permissions and limitations under the Licence.
+// 
+
 fastapi==0.62.0
 fastapi-utils==0.2.1
 uvicorn==0.12.3
 gunicorn==20.0.4
 uvloop==0.14.0
 httptools==0.1.1
-requests==2.24.0
+httpx==0.22.0
 PyJWT==1.4.2
-python-json-logger==0.1.11
 cryptography==3.1.1
 SQLAlchemy==1.3.17
 python-dotenv==0.19.1
@@ -16,6 +35,6 @@ opentelemetry-exporter-jaeger==1.6.2
 opentelemetry-instrumentation==0.26b1
 opentelemetry-instrumentation-fastapi==0.26b1
 opentelemetry-instrumentation-sqlalchemy==0.26b1
-opentelemetry-instrumentation-requests==0.26b1
+opentelemetry-instrumentation-httpx==0.26b1
 opentelemetry-instrumentation-asyncpg==0.26b1
 

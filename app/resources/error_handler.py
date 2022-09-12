@@ -1,3 +1,23 @@
+# Copyright 2022 Indoc Research
+# 
+# Licensed under the EUPL, Version 1.2 or – as soon they
+# will be approved by the European Commission - subsequent
+# versions of the EUPL (the "Licence");
+# You may not use this work except in compliance with the
+# Licence.
+# You may obtain a copy of the Licence at:
+# 
+# https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+# 
+# Unless required by applicable law or agreed to in
+# writing, software distributed under the Licence is
+# distributed on an "AS IS" basis,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+# express or implied.
+# See the Licence for the specific language governing
+# permissions and limitations under the Licence.
+# 
+
 import enum
 from ..models.base_models import APIResponse, EAPIResponseCode
 from functools import wraps
@@ -37,7 +57,7 @@ class ECustomizedError(enum.Enum):
     INVALID_CHOICE = "INVALID_CHOICE"
     FIELD_REQUIRED = "FIELD_REQUIRED"
     TEXT_TOO_LONG = "TEXT_TOO_LONG"
-    INVALID_GENERATE_ID = "INVALID_GENERATE_ID"
+    INVALID_DICOM_ID = "INVALID_DICOM_ID"
     PROJECT_NOT_FOUND = "PROJECT_NOT_FOUND"
     PERMISSION_DENIED = "PERMISSION_DENIED"
     USER_NOT_IN_PROJECT = "USER_NOT_IN_PROJECT"
@@ -62,7 +82,7 @@ def customized_error_template(customized_error: ECustomizedError):
         "INVALID_CHOICE": "Invalid Choice Field %s",
         "FIELD_REQUIRED": "Field Required %s",
         "TEXT_TOO_LONG": "Text Too Long %s",
-        "INVALID_GENERATE_ID": "Invalid Generate ID",
+        "INVALID_DICOM_ID": "Invalid DICOM ID",
         "PROJECT_NOT_FOUND": "Project not found",
         "PERMISSION_DENIED": "Permission Denied",
         "USER_NOT_IN_PROJECT": "User not in the project",
