@@ -1,7 +1,27 @@
+# Copyright 2022 Indoc Research
+# 
+# Licensed under the EUPL, Version 1.2 or – as soon they
+# will be approved by the European Commission - subsequent
+# versions of the EUPL (the "Licence");
+# You may not use this work except in compliance with the
+# Licence.
+# You may obtain a copy of the Licence at:
+# 
+# https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+# 
+# Unless required by applicable law or agreed to in
+# writing, software distributed under the Licence is
+# distributed on an "AS IS" basis,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+# express or implied.
+# See the Licence for the specific language governing
+# permissions and limitations under the Licence.
+# 
+
 from fastapi import APIRouter, Depends
 from fastapi_utils.cbv import cbv
 from ...models.project_models import *
-from ...commons.logger_services.logger_factory_service import SrvLoggerFactory
+from logger import LoggerFactory
 from ...resources.error_handler import catch_internal
 from ...resources.dependencies import *
 from ...resources.helpers import *
@@ -17,7 +37,7 @@ class APIProject:
     current_identity: dict = Depends(jwt_required)
 
     def __init__(self):
-        self._logger = SrvLoggerFactory(_API_NAMESPACE).get_logger()
+        self._logger = LoggerFactory(_API_NAMESPACE).get_logger()
 
     @router.get("/projects", tags=[_API_TAG],
                 response_model=ProjectListResponse,
@@ -70,7 +90,7 @@ class APIProject:
             self._logger.info(f"User platform role: {role}")
             project_role, code = get_project_role(user_id, project_code)
             self._logger.info(f"User project role: {project_role}, {code}")
-            if data.zone == "vrecore" and project_role == "contributor":
+            if data.zone == ConfigClass.CORE_ZONE_LABEL.lower() and project_role == "contributor":
                 api_response.error_msg = customized_error_template(ECustomizedError.PERMISSION_DENIED)
                 api_response.code = EAPIResponseCode.forbidden
                 api_response.result = project_role
@@ -84,6 +104,22 @@ class APIProject:
             void_check_file_in_zone(data, file, project_code)
         session_id = request.headers.get("Session-ID")
         result = transfer_to_pre(data, project_code, session_id)
+
+        trans_payload = {
+            "current_folder_node": data.current_folder_node,
+            "project_code": project_code,
+            "operator": data.operator,
+            "upload_message": data.upload_message,
+            "data": data.data,
+            "job_type": data.job_type
+        }
+
+        url = select_url_by_zone(data.zone)
+        self._logger.info(f"Transfer to pre url: {url}")
+        self._logger.info(f"Transfer to pre payload: {trans_payload}")
+        self._logger.info(f"Transfer to pre result: {result}")
+        self._logger.info(f"Transfer to pre result: {result.status_code}")
+        self._logger.info(f"Transfer to pre result: {result.__dict__}")
         if result.status_code == 409:
             api_response.error_msg = result.json()['error_msg']
             api_response.code = EAPIResponseCode.conflict
@@ -111,7 +147,7 @@ class APIProject:
             user_name = self.current_identity['username']
         except (AttributeError, TypeError):
             return self.current_identity
-        self._logger.info("API list_manifest".center(80, '-'))
+        self._logger.info("API list_folder".center(80, '-'))
         self._logger.info(f"User request with identity: {self.current_identity}")
         zone_type = get_zone(zone)
         permission_event = {'user_id': user_id,
@@ -128,7 +164,7 @@ class APIProject:
             api_response.code = permission.get('code')
             api_response.result = permission.get('result')
             return api_response.json_response()
-        uploader = permission.get('uploader')
+        uploader = permission.get('uploader', '')
         accessing_folder = folder.split('/')[0]
         if uploader and uploader != accessing_folder:
             api_response.error_msg = customized_error_template(ECustomizedError.PERMISSION_DENIED)

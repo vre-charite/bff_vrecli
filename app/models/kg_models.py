@@ -1,3 +1,23 @@
+# Copyright 2022 Indoc Research
+# 
+# Licensed under the EUPL, Version 1.2 or – as soon they
+# will be approved by the European Commission - subsequent
+# versions of the EUPL (the "Licence");
+# You may not use this work except in compliance with the
+# Licence.
+# You may obtain a copy of the Licence at:
+# 
+# https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+# 
+# Unless required by applicable law or agreed to in
+# writing, software distributed under the Licence is
+# distributed on an "AS IS" basis,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+# express or implied.
+# See the Licence for the specific language governing
+# permissions and limitations under the Licence.
+# 
+
 from pydantic import Field, BaseModel
 from .base_models import APIResponse
 
@@ -27,9 +47,6 @@ class KGResponseModel(APIResponse):
     result: dict = Field({}, example={
         'code': 200, 
         'error_msg': '', 
-        'page': 0, 
-        'total': 1, 
-        'num_of_pages': 1, 
         'result': {
             'processing': {}, 
             'ignored': {
@@ -42,7 +59,7 @@ class KGResponseModel(APIResponse):
                         'existing_duplicate': False
                         }, 
                     '@context': 'https://context.org', 
-                    'feedback': 'Resource http://10.3.7.220/kg/v1/resources/charite/VRE_Datasets/_/1634922993 already exists in project charite/VRE_Datasets'
+                    'feedback': 'Resource http://sample-url/kg/v1/resources/pilot/CORE_Datasets/_/1634922993 already exists in project pilot/CORE_Datasets'
                     }
                     }
                 }

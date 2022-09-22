@@ -1,13 +1,31 @@
+# Copyright 2022 Indoc Research
+# 
+# Licensed under the EUPL, Version 1.2 or – as soon they
+# will be approved by the European Commission - subsequent
+# versions of the EUPL (the "Licence");
+# You may not use this work except in compliance with the
+# Licence.
+# You may obtain a copy of the Licence at:
+# 
+# https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+# 
+# Unless required by applicable law or agreed to in
+# writing, software distributed under the Licence is
+# distributed on an "AS IS" basis,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+# express or implied.
+# See the Licence for the specific language governing
+# permissions and limitations under the Licence.
+# 
+
 from fastapi import APIRouter, Depends
 from fastapi_utils.cbv import cbv
 from ...models.dataset_models import *
-from ...commons.data_providers.database import DBConnection
-from ...commons.logger_services.logger_factory_service import SrvLoggerFactory
-from ...resources.error_handler import catch_internal
+from ...models.base_models import EAPIResponseCode
+from ...resources.error_handler import catch_internal, customized_error_template, ECustomizedError
 from ...resources.database_service import RDConnection
-from ...resources.dependencies import *
-from ...resources.helpers import *
-from ...service_logger.logger_factory_service import SrvLoggerFactory
+from ...resources.dependencies import jwt_required, query_node_has_relation_for_user, get_node
+from logger import LoggerFactory
 
 
 router = APIRouter()
@@ -20,7 +38,7 @@ class APIDataset:
     current_identity: dict = Depends(jwt_required)
 
     def __init__(self):
-        self._logger = SrvLoggerFactory(_API_NAMESPACE).get_logger()
+        self._logger = LoggerFactory(_API_NAMESPACE).get_logger()
         self.db = RDConnection()
 
     @router.get("/datasets", tags=[_API_TAG],
@@ -64,7 +82,7 @@ class APIDataset:
             return self.current_identity
         self._logger.info("API list_datasets".center(80, '-'))
         self._logger.info(f"User request with identity: {self.current_identity}")
-        node = get_node_by_code(dataset_code, 'Dataset')
+        node = get_node({"code": dataset_code}, 'Dataset')
         self._logger.info(f"Getting user dataset node: {node}")
         if not node:
             api_response.code = EAPIResponseCode.not_found

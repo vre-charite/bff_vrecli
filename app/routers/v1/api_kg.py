@@ -1,11 +1,31 @@
+# Copyright 2022 Indoc Research
+# 
+# Licensed under the EUPL, Version 1.2 or – as soon they
+# will be approved by the European Commission - subsequent
+# versions of the EUPL (the "Licence");
+# You may not use this work except in compliance with the
+# Licence.
+# You may obtain a copy of the Licence at:
+# 
+# https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+# 
+# Unless required by applicable law or agreed to in
+# writing, software distributed under the Licence is
+# distributed on an "AS IS" basis,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+# express or implied.
+# See the Licence for the specific language governing
+# permissions and limitations under the Licence.
+# 
+
 from fastapi import APIRouter, Depends
 from fastapi_utils.cbv import cbv
-from fastapi.responses import JSONResponse
 from ...models.kg_models import KGImportPost, KGResponseModel
-from ...commons.logger_services.logger_factory_service import SrvLoggerFactory
+from logger import LoggerFactory
 from ...resources.error_handler import catch_internal
-from ...resources.dependencies import *
-from ...resources.helpers import *
+from ...resources.dependencies import jwt_required
+from ...config import ConfigClass
+import httpx
 from fastapi.security import HTTPBasicCredentials, HTTPBearer
 
 router = APIRouter()
@@ -19,7 +39,7 @@ class APIProject:
     security = HTTPBearer()
     
     def __init__(self):
-        self._logger = SrvLoggerFactory(_API_NAMESPACE).get_logger()
+        self._logger = LoggerFactory(_API_NAMESPACE).get_logger()
 
     @router.post("/kg/resources", tags=[_API_TAG],
                 response_model=KGResponseModel,
@@ -39,7 +59,8 @@ class APIProject:
         headers = {"Authorization": "Bearer " + token}
         self._logger.info(f'Request payload: {payload}')
         self._logger.info(f'Request headers: {headers}')
-        response = requests.post(url, json=payload, headers=headers)
+        with httpx.Client() as client:
+            response = client.post(url, json=payload, headers=headers)
         self._logger.info(f'Response: {response.text}')
         content=response.json()
         self._logger.info(f'Response content: {content}')

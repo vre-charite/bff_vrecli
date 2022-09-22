@@ -1,3 +1,23 @@
+# Copyright 2022 Indoc Research
+# 
+# Licensed under the EUPL, Version 1.2 or – as soon they
+# will be approved by the European Commission - subsequent
+# versions of the EUPL (the "Licence");
+# You may not use this work except in compliance with the
+# Licence.
+# You may obtain a copy of the Licence at:
+# 
+# https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+# 
+# Unless required by applicable law or agreed to in
+# writing, software distributed under the Licence is
+# distributed on an "AS IS" basis,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+# express or implied.
+# See the Licence for the specific language governing
+# permissions and limitations under the Licence.
+# 
+
 from pydantic import Field, BaseModel
 from .base_models import APIResponse
 
@@ -9,17 +29,14 @@ class ProjectListResponse(APIResponse):
     result: dict = Field({}, example={
             "code": 200,
             "error_msg": "",
-            "page": 0,
-            "total": 1,
-            "num_of_pages": 1,
             "result": [
                 {
-                    "name": "GENERATE TEST",
-                    "code": "generate"
+                    "name": "Sample project 1",
+                    "code": "sampleproject1"
                 },
                 {
-                    "name": "Indoc Test Project",
-                    "code": "indoctestproject"
+                    "name": "Sample Project 2",
+                    "code": "sampleproject2"
                 }
             ]
         }
@@ -30,9 +47,6 @@ class POSTProjectFileResponse(APIResponse):
     result: dict = Field({}, example={
             "code": 200,
             "error_msg": "",
-            "page": 0,
-            "total": 1,
-            "num_of_pages": 1,
             "result": {}
         }
     )
@@ -45,7 +59,7 @@ class POSTProjectFile(BaseModel):
     type: str
     zone: str
     filename: str
-    generate_id: str
+    dcm_id: str
     current_folder_node: str
     data: list
 
@@ -54,9 +68,6 @@ class GetProjectRoleResponse(APIResponse):
     result: dict = Field({}, example={
             "code": 200,
             "error_msg": "",
-            "page": 0,
-            "total": 1,
-            "num_of_pages": 1,
             "result": "role"
         }
     )
@@ -73,9 +84,6 @@ class GetProjectFolderResponse(APIResponse):
     result: dict = Field({}, example={
         "code": 200,
         "error_msg": "",
-        "page": 0,
-        "total": 1,
-        "num_of_pages": 1,
         "result": {
             "id": 1552,
             "labels": [
@@ -90,7 +98,7 @@ class GetProjectFolderResponse(APIResponse):
             "uploader": "admin",
             "name": "folder_test",
             "time_created": "2021-05-10T22:18:29",
-            "project_code": "may10",
+            "project_code": "sampleproject",
             "tags": []
         }
     }
