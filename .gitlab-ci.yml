@@ -2,7 +2,7 @@ image: docker:latest
 
 variables:
   REGISTRY: registry.bihealth.org
-  CONTAINER_IMAGE: ${REGISTRY}/vre/bff-vrecli:${CI_COMMIT_SHORT_SHA}
+  CONTAINER_IMAGE: ${REGISTRY}/vre/bff_vrecli:${CI_COMMIT_SHORT_SHA}
 
 build:
   stage: build
